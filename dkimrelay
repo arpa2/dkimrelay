@@ -1,0 +1,195 @@
+#!/usr/bin/env python
+#
+# dkimrelay.py -- Sign outgoing email with DKIM
+#
+# This script is specific for the configured domains, and uses the
+# configured key for each of them, using the configured selector name.
+#
+# Multiple domains can use the same key and may also use other signing
+# tools or different instances of this tool; it is possible to configure
+# different selectors because the one used is mentioned in the added
+# DKIM-Signature header.
+#
+# From: Rick van Rein <rick@openfortress.nl>
+
+
+###
+### CONFIGURATION.BEGIN
+###
+
+
+# The list of domain names that are signed by this filter.  Anything
+# else passes unsigned.  The domain will take responsibility and be
+# added to the DKIM-Signature.
+#
+# The domain is taken from the envelope's MAIL FROM command, and should
+# be interpreted before any SRS processing takes place [as that sets
+# this field to the local domain instead of a remote domain to compensate
+# for SPF failure caused by forwarding].
+#
+domains = [ ]
+
+# The selector used in the DKIM-Signature, needed to locate the public
+# key in DNS, in a TXT record for "%(selector)s._domainkey.%(domain)s".
+# The same selector is used for all domains that are signed here, so
+# the listed domains must coordinate this name (usually trivial).
+#
+selector = 'mykey'
+
+# The path to the private key file used for producing the DKIM-Signature.
+# A pattern referencing the selector is currently setup, but one might
+# also choose to include the domain name in the pattern.
+#
+privkey = '/var/lib/dkim/%s.private' % selector
+
+# The canonicalisation algorithms used; use 'simple' to have line folding
+# invalidate the signature; use 'relaxed' to risk changes to signed
+# headers [such as the Subject: header] or the body [such as MIME rewrites]
+# to invalidate the signature.
+#
+canonicalisation = ( 'relaxed', 'relaxed' )
+
+# The signing algorithm used.
+#
+sign_alg = 'rsa-sha256'
+
+# Specify non-standard headers to include in the DKIM-Signature.
+#
+headers = None
+
+# The listenhost is the address at which this filter listens for
+# incoming SMTP traffic.  It takes the form of a hostname (usually
+# localhost) or IP address (usually ::1) and a port.
+#
+listenhost = ('localhost', 12345)
+
+# The relayhost is the next step in processing; perhaps SRS processing,
+# or an upstream MTA, or the queue for the outgoing message.  It takes
+# the form of a hostname or IP address and a port.
+#
+relayhost = ('smtp.example.com', 25)
+
+# Before signing with DKIM, it can be useful to assure that a given text
+# is present in the Subject: header and, if not, prefix it with a space
+# after it.  This is usually something like "[listname]" for one of the
+# recipients, and will not be added again by email lists.  Adding this
+# in all cases helps to invalidate the DKIM-Signature: when it passes
+# through the list.
+#
+# This option points to a database, that can be filled the tags for any
+# recipient.  This is searched with the recipients.  When multipe
+# recipients are found, each will be given the additional tag.
+#
+subjecttagdb = '/etc/arpa2mail/rcpt2subjtag.db'
+
+
+###
+### CONFIGURATION.END
+###
+
+
+import sys
+
+import asyncore
+import smtpd
+import smtplib
+import anydbm
+
+import email.parser, email.header, email.message
+
+import dkim
+
+
+# Code based on https://github.com/MiroslavHoudek/postfix-filter-loop
+
+
+privkey_data = open (privkey).read ()
+
+class SigningSMTPServer (smtpd.SMTPServer):
+
+	def process_message (self, peer, mailfrom, rcpttos, data):
+		#
+		#HUH?# mailfrom.replace ('\'', '')
+		#HUH?# mailfrom.replace ('\"\, '')
+		#
+		#HUH?# for rcpt in rcpttos:
+		#HUH?# 	rcpt.replace ('\'', '')
+		#HUH?# 	rcpt.replace ('\"\, '')
+		#
+		# Prepend any [tags] for recipients to the Subject: header
+		#
+		tags = []
+		try:
+			subject_tagging = anydbm.open (subjecttagdb, 'r')
+		except:
+			subject_tagging = { }
+		for rcpt in rcpttos:
+			try:
+				tags.append (subject_tagging [rcpt])
+				sys.stderr.write ('Adding tag ' + tags [-1] + ' for email to ' + rcpt + '\n')
+			except:
+				pass
+		if type (subject_tagging) != type ({}):
+			subject_tagging.close ()
+		if len (tags) > 0:
+			prs = email.parser.Parser ()
+			msg = prs.parsestr (data)
+			subj = msg ['Subject']
+			change = False
+			for tag in tags:
+				if not tag in subj:
+					subj = tag + ' ' + subj
+					change = True
+			if change:
+				msg.replace_header ('Subject', subj)
+				data = msg.as_string ()
+				data = data.replace ('\r\n', '\n')
+				data = data.replace ('\n', '\r\n')
+		#
+		# Proceed with DKIM signing
+		#
+		try:
+			domind = 1 + mailfrom.rindex ('@')
+			#DEBUG# print 'Domain index is', domind
+			fromdom = mailfrom [domind:]
+			#DEBUG# print 'Domain is', fromdom
+			#DEBUG# print 'Private key size', len (privkey_data)
+			if fromdom in domains:
+				dkimsig_hdr = dkim.sign (
+						message=data,
+						selector=selector,
+						domain=fromdom,
+						privkey=privkey_data,
+						identity=mailfrom,
+						canonicalize=canonicalisation,
+						signature_algorithm=sign_alg,
+						include_headers=headers,
+						length=False,
+						logger=None )
+				if dkimsig_hdr [-5:] == '\r\n \r\n':
+					dkimsig_hdr = dkimsig_hdr [:-3]
+				data = dkimsig_hdr + data
+				print 'Successfully signed mail from', mailfrom
+			else:
+				print 'Not DKIM-signed mail from', mailfrom
+		except Exception, e:
+			sys.stderr.write ('Exception in DKIM filter: '
+						+ str (e) + '\n')
+			# Silent error: Send without signature
+		finally:
+			try:
+				fwd = smtplib.SMTP (*relayhost)
+				fwd.sendmail (mailfrom, rcpttos, data)
+				fwd.quit ()
+			except smtplib.SMTPException, e:
+				print 'Exception in SMTP relay:', str (e)
+				sys.stderr.write ('Exception in SMTP relay: '
+						+ str (e) + '\n')
+				# Loud error: Break off client connection
+				raise
+
+
+server = SigningSMTPServer (listenhost, None)
+
+asyncore.loop ()
+

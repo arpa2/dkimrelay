@@ -1,0 +1,60 @@
+#!/usr/bin/env python
+#
+# dkimrelay-recipient-subject-tag sets a subject tag for a given recipient
+#
+# This tool sets a tag for the Subject: line sent to a given recipient.
+# When no tag is provided, any pre-existing entry is removed.  This is
+# an idempotent operation.
+#
+# After setting this value, emails to the given recipient will be inspected
+# for their Subject: header to include the given tag and, if not, one will
+# be prefixed.  For any given email, multiple recipients may lead to
+# multiple prefix tags (in arbitrary order).
+#
+# From: Rick van Rein <rick@openfortress.nl>
+
+
+###
+### CONFIGURATION.BEGIN
+###
+
+# This option points to a database, that can be filled the tags for any
+# recipient.  This is searched with the recipients.  When multipe
+# recipients are found, each will be given the additional tag.
+#
+subjecttagdb = '/etc/arpa2mail/rcpt2subjtag.db'
+
+
+###
+### CONFIGURATION.END
+###
+
+
+import sys
+
+import anydbm
+
+
+
+if len (sys.argv) not in [2,3]:
+	sys.stderr.write ('Usage: %s recipient [tag]\n' % sys.argv [0])
+	sys.exit (1)
+
+rcpt = sys.argv [1].lower ()
+
+if len (sys.argv) == 3:
+	subjtag = sys.argv [2]
+else:
+	subjtag = None
+
+
+tagdb = anydbm.open (subjecttagdb, 'c')
+
+if subjtag is not None:
+	tagdb [rcpt] = subjtag
+else:
+	if tagdb.has_key (rcpt):
+		del tagdb [rcpt]
+
+tagdb.close ()
+
