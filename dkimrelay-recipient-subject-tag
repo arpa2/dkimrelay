@@ -71,7 +71,7 @@ tagdb = anydbm.open (subjecttagdb, 'c')
 
 # List modus
 if rcpt is None:
-	print '[rcpt2subjtag]'
+	print '[RCPT2SUBJTAG]'
 	for (rcpt,subjtag) in tagdb.items ():
 		if ':' in rcpt:
 			sys.stderr.write ('Recipient problem: ' + rcpt + ' contains a colon')

@@ -8,7 +8,7 @@ While in transit, it adds DKIM signatures.
 
 ## Adding DKIM
 
-This filter can be configured to add a DKIM-Signature: header to
+This filter can be configured to add a `DKIM-Signature:` header to
 selected sending domains.  This will mostly be set to domain names
 hosted locally.
 
@@ -24,7 +24,7 @@ that an upstream mail provider actually takes care of delivery.
 Especially with Postfix, this approach means that changes made in
 the various `canonical_maps` and in the `generic_maps` are made
 before signing takes place.  Since these rewrite headers that are
-commonly included in the DKIM-Signature: header, this is important
+commonly included in the `DKIM-Signature:` header, this is important
 to retain a valid signature on a maximally diverse configuration.
 
 When neither of these things are used, you may consider `content_filter`
@@ -33,7 +33,7 @@ setups with DKIMrelay.
 Note that an MTA splits the delivery of a message, and so there may
 be more than one outgoing path.  Since the DKIMrelay sits on the
 outwards SMTP path, it *will not* sign locally delivered email.
-So, if you have the habit of sending yourself a `Bcc:` to  local
+So, if you have the habit of sending yourself a `Bcc:` to a local
 address you will not see the added `DKIM-Signature:` header in it.
 
 

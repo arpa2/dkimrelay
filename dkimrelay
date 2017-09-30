@@ -167,7 +167,6 @@ class SigningSMTPServer (smtpd.SMTPServer):
 			sys.stderr.write ('Exception in DKIM filter: '
 						+ str (e) + '\n')
 			# Silent error: Send without signature
-			raise #DEBUG#
 		finally:
 			try:
 				fwd = smtplib.SMTP (relay_host, relay_port)
