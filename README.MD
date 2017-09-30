@@ -39,9 +39,13 @@ address you will not see the added `DKIM-Signature:` header in it.
 
 ## Configuration
 
-The configuration variables are set in the Python script files
-themselves.  Please note that at least one shared parameter exists,
-in the form of a database file name.
+The configuration variables are set in an INI-style file, with
+an example in `dkimrelay.conf` and the normal storage location in
+`/etc/arpa2mail/dkimrelay.conf`.
+
+There is a database management utility `dkimrelay-recipient-subject-tag`
+that lists, clears or sets a database entry with 0, 1 and 2 arguments,
+respectively.
 
 
 ## Relation with SRSrelay

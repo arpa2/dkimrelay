@@ -16,25 +16,39 @@
 # From: Rick van Rein <rick@openfortress.nl>
 
 
-###
-### CONFIGURATION.BEGIN
-###
-
-# This option points to a database, that can be filled the tags for any
-# recipient.  This is searched with the recipients.  When multipe
-# recipients are found, each will be given the additional tag.
-#
-subjecttagdb = '/etc/arpa2mail/rcpt2subjtag.db'
-
-
-###
-### CONFIGURATION.END
-###
-
-
 import sys
 
 import anydbm
+
+import ConfigParser
+
+
+#
+# Load the DKIM configuration from /etc/arpa2mail/dkimrelay.conf
+#
+
+defaults = {
+	'domains': [],
+	'subjecttagdb': '/etc/arpa2mail/rcpt2subjtag.db',
+	'relayhost': 'localhost',
+	'relayport': '25',
+	'listenhost': 'localhost',
+	'listenport': '25',
+	'canonicalisation_headers': 'relaxed',
+	'canonicalisation_body':    'relaxed',
+	'sign_alg': 'rsa-sha256',
+	'headers': None
+}
+
+cfg = ConfigParser.RawConfigParser (defaults)
+try:
+	cfgf = open ('/etc/arpa2mail/dkimrelay.conf')
+except:
+	cfgf = open ('dkimrelay.conf')
+cfg.readfp (cfgf)
+cfgf.close ()
+
+subjecttagdb = cfg.get ('DKIM', 'subjecttagdb')
 
 
 
