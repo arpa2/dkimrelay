@@ -10,6 +10,8 @@
 # different selectors because the one used is mentioned in the added
 # DKIM-Signature header.
 #
+# Home of DKIMrelay: https://github.com/arpa2/dkimrelay
+#
 # From: Rick van Rein <rick@openfortress.nl>
 
 

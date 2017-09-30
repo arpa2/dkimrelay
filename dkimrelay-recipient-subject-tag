@@ -11,6 +11,8 @@
 # be prefixed.  For any given email, multiple recipients may lead to
 # multiple prefix tags (in arbitrary order).
 #
+# Home of DKIMrelay: https://github.com/arpa2/dkimrelay
+#
 # From: Rick van Rein <rick@openfortress.nl>
 
 
@@ -36,13 +38,16 @@ import anydbm
 
 
 
-if len (sys.argv) not in [2,3]:
-	sys.stderr.write ('Usage: %s recipient [tag]\n' % sys.argv [0])
+if len (sys.argv) not in [1,2,3]:
+	sys.stderr.write ('Usage: %s [recipient [tag]]\n' % sys.argv [0])
 	sys.exit (1)
 
-rcpt = sys.argv [1].lower ()
+if len (sys.argv) > 1:
+	rcpt = sys.argv [1].lower ()
+else:
+	rcpt = None
 
-if len (sys.argv) == 3:
+if len (sys.argv) > 2:
 	subjtag = sys.argv [2]
 else:
 	subjtag = None
@@ -50,6 +55,24 @@ else:
 
 tagdb = anydbm.open (subjecttagdb, 'c')
 
+# List modus
+if rcpt is None:
+	print '[rcpt2subjtag]'
+	for (rcpt,subjtag) in tagdb.items ():
+		if ':' in rcpt:
+			sys.stderr.write ('Recipient problem: ' + rcpt + ' contains a colon')
+			key = '#KEYERR# ' + rcpt
+		elif '=' in rcpt:
+			sys.stderr.write ('Recipient problem: ' + rcpt + ' contains an equals sign')
+			key = '#KEYERR# ' + rcpt
+		elif subjtag [:1] in ' \t\r\n':
+			sys.stderr.write ('Subject tag problem: ' + subjtag + ' starts with whitespace')
+			key = '#VALERR# ' + rcpt
+		else:
+			key =  rcpt
+		print key + ': ' + subjtag
+
+# Set/Clear modus
 if subjtag is not None:
 	tagdb [rcpt] = subjtag
 else:
