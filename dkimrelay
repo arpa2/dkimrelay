@@ -16,6 +16,7 @@
 
 
 import sys
+from syslog import *
 
 import asyncore
 import smtpd
@@ -59,6 +60,7 @@ cfgf.close ()
 #
 
 domains = cfg.get ('DKIM', 'domains').split ()
+all_domains = '*' in domains
 
 subjecttagdb = cfg.get ('DKIM', 'subjecttagdb')
 
@@ -136,11 +138,11 @@ class SigningSMTPServer (smtpd.SMTPServer):
 		#
 		try:
 			domind = 1 + mailfrom.rindex ('@')
-			#DEBUG# print 'Domain index is', domind
+			#DEBUG# syslog (LOG_DEBUG, 'Domain index is ' + str (domind))
 			fromdom = mailfrom [domind:]
-			#DEBUG# print 'Domain is', fromdom
-			#DEBUG# print 'Private key size', len (privkey_data)
-			if fromdom in domains:
+			#DEBUG# syslog (LOG_DEBUG, 'Domain is ' + str (fromdom))
+			#DEBUG# syslog (LOG_DEBUG, 'Private key size ' + str (len (privkey_data)))
+			if all_domains or fromdom in domains:
 				map = { 'domain': fromdom }
 				selector = selector_patn % map
 				map ['selector'] = selector
@@ -160,11 +162,11 @@ class SigningSMTPServer (smtpd.SMTPServer):
 				if dkimsig_hdr [-5:] == '\r\n \r\n':
 					dkimsig_hdr = dkimsig_hdr [:-3]
 				data = dkimsig_hdr + data
-				print 'Successfully signed mail from', mailfrom
+				syslog (LOG_INFO, 'Successfully signed mail from ' + mailfrom)
 			else:
-				print 'Not DKIM-signed mail from', mailfrom
+				syslog (LOG_NOTICE, 'Not DKIM-signed mail from ' + mailfrom)
 		except Exception, e:
-			sys.stderr.write ('Exception in DKIM filter: '
+			syslog (LOG_ERR, 'Exception in DKIM filter: '
 						+ str (e) + '\n')
 			# Silent error: Send without signature
 		finally:
@@ -173,12 +175,15 @@ class SigningSMTPServer (smtpd.SMTPServer):
 				fwd.sendmail (mailfrom, rcpttos, data)
 				fwd.quit ()
 			except smtplib.SMTPException, e:
-				print 'Exception in SMTP relay:', str (e)
-				sys.stderr.write ('Exception in SMTP relay: '
+				syslog (LOG_ERR, 'Exception in SMTP relay: ' + str (e))
+				syslog (LOG_ERR, 'Exception in SMTP relay: '
 						+ str (e) + '\n')
 				# Loud error: Break off client connection
 				raise
 
+
+
+openlog ("dkimrelay", LOG_NDELAY, LOG_MAIL)
 
 server = SigningSMTPServer ( (listen_host, listen_port), None)
 
